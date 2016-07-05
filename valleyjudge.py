@@ -2,7 +2,7 @@
 
 import sys
 from collections import namedtuple
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from collections import defaultdict, Iterable
 import numbers
 from types import new_class
@@ -442,6 +442,7 @@ def make_vests(
     d = cliff_vest_day + timedelta(days=1)
     while annual_ratios:
         if (d.month, d.day) in vesting_dates:
+            dist_from_cliff = d - cliff_vest_day
             frac = annual_ratios[0] / len(vesting_dates)
             vests.append((d, frac * total))
             nrv += 1
@@ -470,7 +471,10 @@ def make_earnings_table(
         already_earned_first_year,
         already_earned_state,
         paydays):
-    end_date = start_date.replace(year = start_date.year + nr_years)
+    end_date = start_date.replace(
+        year = start_date.year + nr_years,
+    )
+    end_date += timedelta(days=1)
     vests = []
     for offer in offers:
         offer_vests = []
@@ -616,10 +620,15 @@ def make_offer_comparison(
                     default=DEFAULT_TERMINAL)
     ap.add_argument("--output", help="gnuplot output",
                     default=None)
+    ap.add_argument("--notaxes", help="Disable tax calculation",
+                    action="store_true")
     args = ap.parse_args(argv[1:])
 
     logging_level = logging.DEBUG if args.debug else logging.WARNING
     logging.basicConfig(level=logging_level)
+
+    if args.notaxes:
+        taxes = None
 
     colors = list(reversed(AUTO_COLORS))
     offer_colors = tuple(o.color or colors.pop() for o in offers)
@@ -645,16 +654,28 @@ def make_offer_comparison(
     if args.output is not None:
         formatting.append('set output ' + gnuplot_quote(args.output))
 
+    manual_top_tics = []
+    epoch = datetime.utcfromtimestamp(0)
+    for yearno in range(0, nr_years+3):
+        anniversary = start_date.replace(year = start_date.year + yearno)
+        anniversary_dt = datetime.combine(anniversary, datetime.min.time())
+        anniversary_unix_time = (anniversary_dt - epoch).total_seconds()
+        label = "Year %u" % (yearno+1)
+        manual_top_tics.append(
+            "%s %r" % (gnuplot_quote(label), anniversary_unix_time) )
+
     formatting.extend([
         'set decimal locale',
+        'set link x',
         'set xdata time',
         'set xtics rotate by -90',
+        'set x2tics (%s)' % ",".join(manual_top_tics),
         'set timefmt "%Y-%m-%d"',
         'set format x "%Y/%m"',
         'set format y "$%\'.0f"',
         'set key left',
         'set linestyle 10 lc rgb "#dddddd" lw 1',
-        'set grid ytics mytics linestyle 10',
+        'set grid ytics mytics x2tics linestyle 10',
         'set mytics',
         'set y2tics',
         'set format y2 "$%\'.0f"',
