@@ -5,6 +5,7 @@ from collections import namedtuple
 from datetime import date, datetime, timedelta
 from collections import defaultdict, Iterable
 import numbers
+import math
 from types import new_class
 import shlex
 from itertools import accumulate
@@ -295,18 +296,18 @@ class RsuGrant(object):
         that vests quarterly will have a four-element
         VESTING_DATES sequence.
 
-        VESTING is a sequence of numbers that sum to 1.0.  Each one
-        represents a year over which the grant vests, and the value of
-        the number indicates the portion of the grant that vests in
-        that year.
+        VESTING is a sequence of numbers that sum to 1.0.  With default
+        vesting dates, each one represents a year over which the grant vests, 
+        and the value of the number indicates the portion of the grant that 
+        vests in that year.
 
         """
         self.total = typecheck(total, numbers.Real)
         self.start = typecheck(start, (date, timedelta, type(None)))
         self.vesting_dates = typecheck(vesting_dates, seq_of(pair_of(int)))
         self.vesting = typecheck(vesting, seq_of(numbers.Real))
-        if sum(vesting) != 1.0:
-            raise ValueError("vesting fractions do not sum to 1")
+        if not math.isclose(sum(vesting), 1.0, rel_tol=1e-5):
+            raise ValueError("vesting fractions do not sum to 1: %1.5f" % sum(vesting))
 
 class Offer(object):
     """Describes an offer"""
